@@ -1,0 +1,65 @@
+# =============================================================================
+# Traefik 1 — Dynamic Configuration
+# Role: mTLS CLIENT
+#
+# This file defines:
+#   1. serversTransport — HOW Traefik 1 connects to Traefik 2 (with client cert)
+#   2. routers          — WHAT paths go where
+#   3. services         — WHERE upstream targets are
+# =============================================================================
+
+http:
+
+  # ---------------------------------------------------------------------------
+  # serversTransport: defines the mTLS client behaviour for outbound calls
+  #
+  # When Traefik 1 connects to Traefik 2 it will:
+  #   - Present traefik1.crt as its client identity
+  #   - Verify Traefik 2's server cert against ca.crt
+  #   - Enforce that the server name matches "traefik2" (CN/SAN in traefik2.crt)
+  # ---------------------------------------------------------------------------
+  serversTransports:
+    traefik2-mtls-transport:
+      serverName: "traefik2"             # must match CN/SAN in traefik2.crt
+      certificates:
+        - certFile: /certs/traefik1.crt  # our client identity — presented to Traefik 2
+          keyFile:  /certs/traefik1.key
+      rootCAs:
+        - /certs/ca.crt                  # CA that signed Traefik 2's server cert
+
+  # ---------------------------------------------------------------------------
+  # Routers: decide where each request goes based on path prefix
+  # ---------------------------------------------------------------------------
+  routers:
+
+    # /api2/* → goes to Traefik 2 via mTLS
+    to-api2:
+      rule: "PathPrefix(`/api2`)"
+      entryPoints:
+        - web
+      service: traefik2-service
+
+    # /api1/* → goes directly to API 1 (plain HTTP, no mTLS needed internally)
+    to-api1:
+      rule: "PathPrefix(`/api1`)"
+      entryPoints:
+        - web
+      service: api1-service
+
+  # ---------------------------------------------------------------------------
+  # Services: upstream targets for each router
+  # ---------------------------------------------------------------------------
+  services:
+
+    # Traefik 2 — connected via HTTPS + client cert (mTLS)
+    traefik2-service:
+      loadBalancer:
+        servers:
+          - url: "https://traefik2:443"
+        serversTransport: traefik2-mtls-transport   # ← attach the mTLS transport
+
+    # API 1 — plain HTTP internally
+    api1-service:
+      loadBalancer:
+        servers:
+          - url: "http://api-1:8081"

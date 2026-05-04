@@ -1,0 +1,91 @@
+# =============================================================================
+# Traefik 2 — Dynamic Configuration
+# Role: mTLS SERVER
+#
+# This file defines:
+#   1. tls.certificates — Traefik 2's own server cert (presented to Traefik 1)
+#   2. tls.options      — enforces RequireAndVerifyClientCert (the mTLS part)
+#   3. router + service — routes verified requests to API 2 via plain HTTP
+# =============================================================================
+
+http:
+
+  # ---------------------------------------------------------------------------
+  # Router: matches inbound requests and enforces mTLS via tls.options ref
+  # ---------------------------------------------------------------------------
+  routers:
+    api2-router:
+      rule: "PathPrefix(`/api2`)"
+      entryPoints:
+        - websecure
+      service: api2-service
+      tls: {}     # enable TLS on this router — fallback to `default` TLS options 
+                  # happens implicitly because no named TLS option is specified.
+
+  # ---------------------------------------------------------------------------
+  # Service: forwards verified requests to API 2 as plain HTTP.
+  # API 2 is completely unaware of TLS — it receives plain HTTP only.
+  # ---------------------------------------------------------------------------
+  services:
+    api2-service:
+      loadBalancer:
+        servers:
+          - url: "http://api-2:8082"
+
+# =============================================================================
+# TLS Configuration
+# =============================================================================
+tls:
+
+  # ---------------------------------------------------------------------------
+  # Traefik 2's own server certificate.
+  # Presented to Traefik 1 during the TLS handshake so Traefik 1 can verify
+  # it is really talking to Traefik 2 and not an imposter.
+  # ---------------------------------------------------------------------------
+  certificates:
+    - certFile: /certs/traefik2.crt
+      keyFile:  /certs/traefik2.key
+
+  # ---------------------------------------------------------------------------
+  # TLS Options: this is the heart of mTLS enforcement.
+  #
+  # clientAuthType values (for reference):
+  #   NoClientCert               — standard TLS, no client cert requested
+  #   RequestClientCert          — ask for cert but don't require it
+  #   RequireAnyClientCert       — require cert but don't verify the CA
+  #   VerifyClientCertIfGiven    — verify if provided but don't require
+  #   RequireAndVerifyClientCert — REQUIRE cert AND verify against CA ← mTLS
+  # ---------------------------------------------------------------------------
+  options:
+    default:
+      minVersion: VersionTLS12
+      clientAuth:
+        caFiles:
+          - /certs/ca.crt             # CA that signed Traefik 1's client cert.
+                                      # Any cert NOT signed by this CA is rejected.
+        clientAuthType: RequireAndVerifyClientCert  # ← the mTLS enforcement
+
+# Since we're connecting to localhost, there's no domain name and therefore no SNI. 
+# Traefik falls back to the default TLS options when no SNI match is found — so by 
+# naming our options default, we ensure mTLS is enforced for all connections regardless of hostname.
+
+# In Prod we would have a real domain name like api2.mycompany.com, so Traefik can use SNI to match TLS 
+# options. A named TLS option will be used instead:
+# Prod dynamic config
+
+# tls:
+#   options:
+#     mtls-required:        # ← named, not "default"
+#       minVersion: VersionTLS12
+#       clientAuth:
+#         caFiles:
+#           - /certs/ca.crt
+#         clientAuthType: RequireAndVerifyClientCert
+
+# And the router would use a hostname-based rule:
+
+# routers:
+#   api2-router:
+#     rule: "Host(`api2.mycompany.com`) && PathPrefix(`/api2`)"
+#     #         ↑ real domain = SNI available = Traefik can match TLS options correctly
+

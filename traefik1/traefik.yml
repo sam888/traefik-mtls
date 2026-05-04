@@ -1,0 +1,29 @@
+# =============================================================================
+# Traefik 1 — Static Configuration
+# Role: mTLS CLIENT / egress proxy for API 1
+#
+# Responsibilities:
+#   - Accept plain HTTP from API 1 on port 80
+#   - For /api2/* requests: attach client cert, forward to Traefik 2 via mTLS
+#   - For /api1/* requests: forward plain HTTP directly to API 1
+# =============================================================================
+
+log:
+  level: DEBUG
+
+accessLog:
+  filePath: "/var/log/traefik/access.log"
+
+# Dashboard — useful for inspecting routes while developing
+api:
+  dashboard: true
+  insecure: true   # dashboard on :8080, no auth (dev only — disable in prod)
+
+entryPoints:
+  web:
+    address: ":80"   # accepts plain HTTP from API 1 and external callers
+
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true      # hot-reload config changes without restart

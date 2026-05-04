@@ -1,0 +1,17 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: api1
+#  webflux:
+#    base-path: /api1
+
+# URL of Traefik 1 — API 1 sends outbound calls here.
+# Traefik 1 adds the mTLS client cert and forwards to Traefik 2.
+traefik1:
+  url: "http://traefik1:80"
+
+logging:
+  level:
+    com.example.api1: DEBUG

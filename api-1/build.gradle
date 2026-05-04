@@ -1,0 +1,46 @@
+plugins {
+    id 'org.springframework.boot' version '3.5.14'
+    id 'io.spring.dependency-management' version '1.1.5'
+    id 'java'
+}
+
+group = 'com.example'
+version = '1.0.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // WebFlux — reactive REST API
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+
+    // Lombok — reduces boilerplate
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    // Test
+//    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+//    testImplementation 'io.projectreactor:reactor-test'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+// Ensure the bootJar produces a single runnable JAR
+tasks.named('bootJar') {
+    archiveFileName = "${rootProject.name}.jar"
+}

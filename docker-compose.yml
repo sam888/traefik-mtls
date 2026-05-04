@@ -1,0 +1,125 @@
+# version: '3.8'
+
+# =============================================================================
+# Traefik mTLS Demo
+#
+#   API 1 ←→ Traefik 1 ══mTLS══ Traefik 2 ←→ API 2
+#
+# Network isolation (3 separate networks):
+#   network-left:   API 1  + Traefik 1  (plain HTTP)
+#   network-right:  API 2  + Traefik 2  (plain HTTP)
+#   network-bridge: Traefik 1 + Traefik 2 (mTLS channel)
+#
+# API 1 has NO route to API 2 — the only path is through the Traefik bridge.
+#
+# Ports exposed for local testing:
+#   :80   → Traefik 1 HTTP entry (external callers + API 1 outbound)
+#   :443  → Traefik 2 mTLS entry (only Traefik 1 should call this)
+#   :8081 → API 1 direct (debug only — bypass Traefik)
+#   :8082 → API 2 direct (debug only — bypass Traefik; remove in prod)
+#   :8880 → Traefik 1 dashboard
+#   :8881 → Traefik 2 dashboard
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Traefik 1 — mTLS CLIENT / egress proxy
+  # Accepts plain HTTP, attaches client cert, forwards to Traefik 2 via mTLS
+  # ---------------------------------------------------------------------------
+  traefik1:     # ← this becomes hostname "traefik1" on the Docker network
+    image: traefik:v3.6
+    container_name: traefik1
+    ports:
+      - "80:80"       # HTTP entrypoint
+      - "8880:8080"   # dashboard → http://localhost:8880/dashboard/
+    volumes:
+      - ./traefik1/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik1/dynamic:/etc/traefik/dynamic:ro
+      - ./certs:/certs:ro
+      - ./logs/traefik1:/var/log/traefik
+    networks:
+      - network-left
+      - network-bridge
+    depends_on:
+      - api-1
+      - traefik2
+
+  # ---------------------------------------------------------------------------
+  # Traefik 2 — mTLS SERVER / ingress proxy
+  # Enforces RequireAndVerifyClientCert; forwards verified requests to API 2
+  # ---------------------------------------------------------------------------
+  traefik2:     # ← this becomes hostname "traefik2" on the Docker network
+    image: traefik:v3.6
+    container_name: traefik2
+    ports:
+      - "443:443"     # mTLS entrypoint (only Traefik 1 should call this)
+      - "8881:8080"   # dashboard → http://localhost:8881/dashboard/
+    volumes:
+      - ./traefik2/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik2/dynamic:/etc/traefik/dynamic:ro
+      - ./certs:/certs:ro
+      - ./logs/traefik2:/var/log/traefik
+    networks:
+      - network-right
+      - network-bridge
+    depends_on:
+      - api-2
+
+  # ---------------------------------------------------------------------------
+  # API 1 — Spring Boot WebFlux (Java 17, Gradle 9.3.1)
+  # Plain HTTP only — zero TLS config in the application
+  # ---------------------------------------------------------------------------
+  api-1:      # ← this becomes hostname "api-1" on the Docker network
+    build:
+      context: ./api-1
+      dockerfile: Dockerfile
+    container_name: api-1
+    ports:
+      - "8081:8081"   # direct debug access (bypasses Traefik)
+    networks:
+      - network-left
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/api1/hello || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # API 2 — Spring Boot WebFlux (Java 17, Gradle 9.3.1)
+  # Plain HTTP only — only reachable via Traefik 2 after mTLS verification
+  # ---------------------------------------------------------------------------
+  api-2:      # ← this becomes hostname "api-2" on the Docker network
+    build:
+      context: ./api-2
+      dockerfile: Dockerfile
+    container_name: api-2
+    ports:
+      - "8082:8082"   # direct debug access (remove this in production)
+    networks:
+      - network-right
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/api2/hello || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+# =============================================================================
+# Networks
+#
+# The 3-network design is a security layer independent of mTLS:
+#   - API 1 cannot directly reach API 2 (no shared network)
+#   - API 2 cannot directly reach API 1 (no shared network)
+#   - External callers cannot reach API 2 or Traefik 2 via network-left
+#   - The ONLY path between API 1 and API 2 is through the mTLS bridge
+# =============================================================================
+networks:
+  network-left:
+    name: network-left
+    driver: bridge
+  network-right:
+    name: network-right
+    driver: bridge
+  network-bridge:
+    name: network-bridge
+    driver: bridge

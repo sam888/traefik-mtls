@@ -1,0 +1,34 @@
+# =============================================================================
+# Traefik 2 — Static Configuration
+# Role: mTLS SERVER / ingress proxy for API 2
+#
+# Responsibilities:
+#   - Accept ONLY mTLS connections on port 443
+#   - Reject any caller that cannot present a cert signed by our CA
+#   - Verify Traefik 1's client certificate against ca.crt
+#   - Forward verified requests as plain HTTP to API 2
+# =============================================================================
+
+log:
+  level: DEBUG
+
+accessLog:
+  filePath: "/var/log/traefik/access.log"
+
+api:
+  dashboard: true
+  insecure: true   # dashboard on :8080
+
+entryPoints:
+  websecure:
+    http:
+      tls:
+        options: default@file   # ← apply mTLS to ALL connections on this entrypoint
+    address: ":443"   # ALL connections here must have valid TLS
+                      # mTLS enforcement (RequireAndVerifyClientCert)
+                      # is applied per-route in dynamic config
+
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
