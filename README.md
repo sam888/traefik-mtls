@@ -4,7 +4,7 @@ This document walks through setting up a working mTLS solution using Traefik and
 # Motivation
 While I've been aware of Mutual TLS (mTLS) for years, I never had a real reason to implement it until I realised it is widely mandated in industries like banking, healthcare, and big tech recently. So curiosity turned into a practical challenge: I wanted to see what it actually takes to implement this — and this guide is the result.
 
-My first instinct was to implement mTLS directly in Spring Boot. But I found out quickly the effort required in using Spring Boot to implement mTLS is way too complicated for its worth, not to mention the steep learning curve and the extensive boilerplate required for each API. Just because Spring Boot can doesn't mean it should.
+Being a Java developer, my first instinct was to implement mTLS directly in Spring Boot. But I found out quickly the effort required in using Spring Boot to implement mTLS is way too complicated for its worth, not to mention the steep learning curve and the extensive boilerplate required for each API. Just because Spring Boot can doesn't mean it should.
 
 Just to give reader a taste what kind of learning effort would it take to do so in Spring Boot, I will list a few top links found for this purpose.
 
@@ -167,17 +167,18 @@ API 1            Traefik 1              Traefik 2              API 2
   │                  │◄─TCP accept──────────│                    │
   │                  │                      │                    │
   │                  │  ┌─ TLS Handshake ──────────────────────┐ │
-  │                  │  │                  │                   │ │
-  │                  │──┼──ClientHello────►│                   │ │
-  │                  │◄─┼──ServerHello─────│                   │ │
-  │                  │◄─┼──traefik2.crt────│  (server cert)    │ │
-  │                  │  │                  │                   │ │
-  │             [Traefik 1 verifies traefik2.crt against ca.crt ✅]
-  │                  │  │                  │                   │ │
+  │                  │  │                   │                  │ │
+  │                  │──┼──ClientHello─────►│                  │ │
+  │                  │◄─┼──ServerHello──────│                  │ │
+  │                  │◄─┼──traefik2.crt─────│ (server cert)    │ │
+  │                  ✅ │                   │                  │ │
+  │            [Traefik 1 verifies traefik2.crt against ca.crt]│ │ 
+  │                  │  │                   │                  │ │
   │                  │◄─┼──CertificateRequest──────────────────│ │
-  │                  │──┼──traefik1.crt───►│  (client cert)    │ │
-  │                  │  │                  │                   │ │
-  │                  │  │  [Traefik 2 verifies traefik1.crt against ca.crt ✅]
+  │                  │──┼──traefik1.crt────►│ (client cert)    │ │
+  │                  │  │                   │                  │ │
+  │                  │  │                   ✅                 │ │
+  │                  │  │  [Traefik 2 verifies traefik1.crt against ca.crt]
   │                  │  │  [mTLS HANDSHAKE COMPLETE]           │ │
   │                  │  └──────────────────────────────────────┘ │
   │                  │                      │                    │
@@ -539,7 +540,6 @@ routers:
     service: api2-service
     tls: {}     # enable TLS on this router — fallback to `default` TLS options 
                 # happens implicitly because no named TLS option is specified.
-      
 ```
 
 `clientAuthType: RequireAndVerifyClientCert` means:
@@ -551,7 +551,9 @@ routers:
 Since we're connecting to localhost, there's no domain name and therefore no SNI (Server Name Indication — the mechanism TLS uses to identify which hostname the client is connecting to). Traefik falls back to the `default` TLS options when no SNI match is found — so by naming our options `default`, we ensure mTLS is enforced for all connections regardless of hostname.
 
 In Prod we would have a real domain name like api2.mycompany.com, so Traefik can use SNI to match TLS options. A named TLS option will be used instead:
+
 Prod dynamic config
+
 ```yaml
 tls:
   options:
@@ -582,7 +584,7 @@ This is the elegant part. The Spring Boot apps sit **inside** the proxy boundary
 External World          Proxy Layer                 Internal Network
 ──────────────  │  ─────────────────────────  │  ─────────────────
                 │                             │
- curl (mTLS) ──►│──► Traefik 2 ─────────────►│──► API 2 (HTTP)
+ curl (mTLS) ──►│──► Traefik 2 ──────────────►│──► API 2 (HTTP)
                 │    (TLS termination here)   │
                 │                             │
 ```
@@ -683,6 +685,18 @@ The `serverName` in Traefik 1's config must exactly match one of these values.
 look at HTTP routers and verify `api2-router` is shown and its service URL
 resolves to `http://api2:8082`.
 
+HTTP Service - api2-service@file
+
+<a href="images/api-service.jpg">
+<img src="images/api-service.jpg" width="600" alt="Click to enlarge">
+</a>
+
+HTTP Router - api2-router@file
+
+<a href="images/HTTP Router.jpg">
+<img src="images/HTTP Router.jpg" width="600" alt="Click to enlarge">
+</a>
+
 ---
 
 ### API 2 container not reachable from Traefik 2
@@ -708,8 +722,8 @@ docker compose logs -f traefik1
 docker compose logs -f traefik2
 
 # Spring Boot app logs
-docker compose logs -f api1
-docker compose logs -f api2
+docker compose logs -f api-1
+docker compose logs -f api-2
 
 # Check Traefik 2 access log for client cert details
 docker exec traefik2 cat /var/log/traefik/access.log | tail -20
