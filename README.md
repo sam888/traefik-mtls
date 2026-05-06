@@ -34,7 +34,7 @@ If you'd like to dig deeper into Traefik before proceeding, here are a few resou
 - 🥇 **Best Overall — Traefik Official mTLS Docs** The canonical reference for Traefik's TLS configuration options, including `clientAuthType` and `RequireAndVerifyClientCert`. Always up to date. 👉 [https://doc.traefik.io/traefik/reference/routing-configuration/http/tls/tls-options/](https://doc.traefik.io/traefik/reference/routing-configuration/http/tls/tls-options/)
 - 🥈 **Best Written Tutorial — DEV Community (badgerbadgerbadgerbadger)** An end-to-end mTLS walkthrough using Traefik as reverse proxy, starting from TLS concepts and building up to a productionisable setup. Concepts translate well beyond the Golang backend used. 👉 [https://dev.to/badgerbadgerbadgerbadger/yet-another-mtls-tutorial-10pp](https://dev.to/badgerbadgerbadgerbadger/yet-another-mtls-tutorial-10pp) — Worth reading for the conceptual depth alone.
 - 🥉 **Best for Kubernetes Context — Vlad Vitan on Medium** Covers configuring mTLS with Traefik as an ingress controller in a Kubernetes cluster using Minikube. Most up to date (2025). 👉 [https://vladvitan.medium.com/configuring-mutual-tls-with-traefik-as-an-ingress-controller-c96f85fe7b6a](https://vladvitan.medium.com/configuring-mutual-tls-with-traefik-as-an-ingress-controller-c96f85fe7b6a)
-- **Best GitHub Example — vahempio/PKI-Traefik-mTLS** A full working local example with a private PKI, covering per-client certificate control. Good companion to your own repo. 👉 [https://github.com/vahempio/PKI-Traefik-mTLS](https://github.com/vahempio/PKI-Traefik-mTLS)
+- **Good GitHub Example — vahempio/PKI-Traefik-mTLS** A full working local example with a private PKI, covering per-client certificate control. 👉 [https://github.com/vahempio/PKI-Traefik-mTLS](https://github.com/vahempio/PKI-Traefik-mTLS)
 
 **Note:** mTLS secures the transport layer but does not replace application-level authentication. In production, pairing mTLS with JWT tokens is considered best practice in zero-trust architectures, particularly in industries like financial services and healthcare.
 # Traefik mTLS — Mutual TLS Between Two Spring Boot APIs
@@ -52,7 +52,7 @@ in enterprise environments and is the foundation of how service meshes like Isti
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                         Docker Network                                          |   
+│                         Docker Networks                                          |   
 │                                                                                 | 
 │  ┌──────────┐   HTTP    ┌───────────┐  mTLS   ┌───────────┐  HTTP  ┌──────────┐ │
 │  │          │ :8081     │           │  :443   │           │ :8082  │          │ │
@@ -174,7 +174,7 @@ API 1            Traefik 1              Traefik 2              API 2
   │                  ✅ │                   │                  │ │
   │            [Traefik 1 verifies traefik2.crt against ca.crt]│ │ 
   │                  │  │                   │                  │ │
-  │                  │◄─┼──CertificateRequest──────────────────│ │
+  │                  │◄─┼CertificateRequest─│                  │ │
   │                  │──┼──traefik1.crt────►│ (client cert)    │ │
   │                  │  │                   │                  │ │
   │                  │  │                   ✅                 │ │
